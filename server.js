@@ -1,9 +1,10 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
-const qrcodeTerminal = require('qrcode-terminal');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+
+process.on('uncaughtException', (err) => console.error('Exception:', err.message));
+process.on('unhandledRejection', (reason) => console.error('Rejection:', reason));
 
 const app = express();
 app.use(express.json());
@@ -13,11 +14,10 @@ const DATA_FILE = path.join(__dirname, 'data', 'data.json');
 const PORT = process.env.PORT || 3000;
 const ASSIGNMENT_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
-// ======= بدأ السيرفر فوراً =======
+// ======= السيرفر بيشتغل أول =======
 app.listen(PORT, () => {
   console.log(`🚀 السيرفر شغال على PORT ${PORT}`);
-  // بدأ واتساب بعد ما السيرفر اشتغل
-  setTimeout(() => initWhatsApp(), 2000);
+  setTimeout(() => initWhatsApp(), 3000);
 });
 
 // ======= البيانات =======
@@ -38,11 +38,16 @@ function saveData(data) {
 
 // ======= واتساب =======
 let isReady = false;
-let currentQRBase64 = null;
+let pairingCode = null;
+let pairingPhone = null;
 let client = null;
+let isInitializing = false;
 
 function initWhatsApp() {
+  if (isInitializing) return;
+  isInitializing = true;
   console.log('⏳ جاري تشغيل واتساب...');
+
   try {
     client = new Client({
       authStrategy: new LocalAuth({ dataPath: path.join(__dirname, 'data', '.wwebjs_auth') }),
@@ -62,47 +67,64 @@ function initWhatsApp() {
           '--disable-sync',
           '--disable-translate',
           '--hide-scrollbars',
-          '--metrics-recording-only',
           '--mute-audio',
-          '--safebrowsing-disable-auto-update',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--js-flags=--max-old-space-size=128',
         ]
       }
     });
 
-    client.on('qr', async (qr) => {
-      console.log('\n📱 QR Code جاهز للمسح');
-      qrcodeTerminal.generate(qr, { small: true });
-      try { currentQRBase64 = await qrcode.toDataURL(qr); }
-      catch (e) { currentQRBase64 = null; }
+    client.on('qr', async () => {
+      // لو فيه رقم محفوظ، اطلب pairing code بدل QR
+      const data = loadData();
+      const phone = data.settings?.pairingPhone;
+      if (phone) {
+        try {
+          console.log(`📱 بطلب pairing code للرقم: ${phone}`);
+          const code = await client.requestPairingCode(phone);
+          pairingCode = code;
+          pairingPhone = phone;
+          console.log(`✅ الكود: ${code}`);
+        } catch (e) {
+          console.error('فشل طلب الكود:', e.message);
+        }
+      } else {
+        console.log('⚠️ مفيش رقم محفوظ - ادخل رقمك في الداشبورد');
+      }
     });
 
     client.on('ready', () => {
       console.log('✅ واتساب متصل!');
       isReady = true;
-      currentQRBase64 = null;
+      pairingCode = null;
+      isInitializing = false;
     });
 
     client.on('disconnected', (reason) => {
       console.log('❌ انفصل:', reason);
       isReady = false;
+      isInitializing = false;
       setTimeout(() => initWhatsApp(), 5000);
     });
 
     client.on('auth_failure', () => {
       console.log('❌ فشل التوثيق');
       isReady = false;
+      isInitializing = false;
     });
 
     client.on('message', handleMessage);
 
     client.initialize().catch(err => {
-      console.error('❌ خطأ في تشغيل واتساب:', err.message);
-      setTimeout(() => initWhatsApp(), 10000);
+      console.error('❌ خطأ تشغيل:', err.message);
+      isInitializing = false;
+      setTimeout(() => initWhatsApp(), 15000);
     });
 
   } catch (err) {
     console.error('❌ خطأ:', err.message);
-    setTimeout(() => initWhatsApp(), 10000);
+    isInitializing = false;
+    setTimeout(() => initWhatsApp(), 15000);
   }
 }
 
@@ -128,8 +150,7 @@ async function handleMessage(msg) {
     }
     data.leads.push({ id: timestamp, phone, message: body, type: 'return', assignedId: existing.salesId, assignedName: existing.salesName, ts: timestamp });
     data.assignments[phone].lastMessage = timestamp;
-    saveData(data);
-    return;
+    saveData(data); return;
   }
 
   if (!data.team.length) { console.log('⚠️ مفيش فريق'); return; }
@@ -151,16 +172,47 @@ async function handleMessage(msg) {
 }
 
 // ======= API =======
-app.get('/api/status', (req, res) => res.json({ ready: isReady, qr: currentQRBase64 }));
+app.get('/api/status', (req, res) => res.json({
+  ready: isReady,
+  pairingCode,
+  pairingPhone,
+  waiting: !isReady && !pairingCode
+}));
+
 app.get('/api/data', (req, res) => res.json(loadData()));
+
+// طلب pairing code برقم التليفون
+app.post('/api/pair', async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'الرقم مطلوب' });
+
+  const data = loadData();
+  if (!data.settings) data.settings = {};
+  data.settings.pairingPhone = phone.replace(/[^0-9]/g, '');
+  saveData(data);
+
+  // لو العميل شغال وفي QR طور، اطلب الكود
+  if (client && !isReady) {
+    try {
+      const code = await client.requestPairingCode(phone.replace(/[^0-9]/g, ''));
+      pairingCode = code;
+      pairingPhone = phone;
+      console.log(`✅ كود الربط: ${code}`);
+      return res.json({ ok: true, code });
+    } catch (e) {
+      return res.status(500).json({ error: 'فشل طلب الكود: ' + e.message });
+    }
+  }
+
+  res.json({ ok: true, message: 'تم حفظ الرقم، هيظهر الكود بعد التشغيل' });
+});
 
 app.post('/api/team', (req, res) => {
   const { name, phone } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'الاسم مطلوب' });
   const data = loadData();
   data.team.push({ id: Date.now(), name: name.trim(), phone: phone?.trim() || '', count: 0 });
-  saveData(data);
-  res.json({ ok: true });
+  saveData(data); res.json({ ok: true });
 });
 
 app.delete('/api/team/:id', (req, res) => {
@@ -169,8 +221,7 @@ app.delete('/api/team/:id', (req, res) => {
   if (idx === -1) return res.status(404).json({ error: 'مش موجود' });
   data.team.splice(idx, 1);
   if (data.currentIndex >= data.team.length && data.team.length > 0) data.currentIndex = 0;
-  saveData(data);
-  res.json({ ok: true });
+  saveData(data); res.json({ ok: true });
 });
 
 app.post('/api/reset-index', (req, res) => {
