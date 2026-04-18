@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>توزيع الليدات</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f11;
+    --bg2: #18181c;
+    --bg3: #222228;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8e8ec;
+    --text2: #9090a0;
+    --text3: #606070;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.1);
+    --green-border: rgba(34,197,94,0.25);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.1);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.1);
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,0.1);
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { background: var(--bg2); border-left: 1px solid var(--border); padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .sidebar-logo { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 16px; padding: 0 8px; display: flex; align-items: center; gap: 8px; }
+  .sidebar-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius); font-size: 14px; color: var(--text2); cursor: pointer; transition: all .15s; border: none; background: none; width: 100%; text-align: right; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--bg3); color: var(--text); }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+
+  /* Main */
+  .main { padding: 28px 32px; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Status bar */
+  .status-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg2); margin-bottom: 24px; font-size: 13px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.disconnected { background: var(--red); }
+  .status-dot.pending { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* Cards */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 16px; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* Stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; }
+  .stat-label { font-size: 12px; color: var(--text3); margin-bottom: 6px; }
+  .stat-value { font-size: 28px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* Team list */
+  .team-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .team-item:last-child { border-bottom: none; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+  .team-info { flex: 1; min-width: 0; }
+  .team-name { font-size: 14px; font-weight: 500; color: var(--text); }
+  .team-phone { font-size: 12px; color: var(--text3); direction: ltr; text-align: right; }
+  .team-count { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; background: var(--bg3); padding: 3px 8px; border-radius: 20px; }
+  .next-badge { font-size: 10px; color: var(--green); background: var(--green-bg); border: 1px solid var(--green-border); padding: 2px 8px; border-radius: 20px; }
+
+  /* Progress bar */
+  .progress-bar { height: 3px; background: var(--bg3); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+
+  /* Form */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-label { font-size: 12px; color: var(--text2); }
+  .form-input { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 9px 12px; font-size: 14px; color: var(--text); outline: none; transition: border-color .15s; font-family: inherit; }
+  .form-input:focus { border-color: var(--blue); }
+  .form-input::placeholder { color: var(--text3); }
+  .btn { padding: 9px 16px; border-radius: var(--radius); border: none; font-size: 14px; font-weight: 500; cursor: pointer; transition: all .15s; font-family: inherit; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
+  .btn-danger:hover { background: rgba(239,68,68,.2); }
+  .btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-full { width: 100%; }
+
+  /* Leads list */
+  .lead-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .lead-item:last-child { border-bottom: none; }
+  .lead-type-badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; flex-shrink: 0; margin-top: 2px; }
+  .badge-new { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+  .badge-return { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,.25); }
+  .lead-phone { font-size: 14px; font-weight: 500; color: var(--text); direction: ltr; }
+  .lead-meta { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .lead-message { font-size: 12px; color: var(--text2); margin-top: 4px; background: var(--bg3); padding: 6px 10px; border-radius: 6px; max-width: 400px; word-break: break-word; }
+  .lead-sales { font-size: 12px; font-weight: 500; margin-top: 4px; }
+
+  /* QR */
+  .qr-container { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px; }
+  .qr-container img { border-radius: var(--radius); background: white; padding: 12px; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 14px; }
+
+  /* Divider */
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  /* Alert */
+  .alert { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; }
+  .alert-warning { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,.25); }
+
+  /* Filter tabs */
+  .filter-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .filter-tab { padding: 5px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: none; color: var(--text2); transition: all .15s; }
+  .filter-tab.active { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="dot"></span>
+      توزيع الليدات
+    </div>
+    <button class="nav-item active" onclick="showPage('overview')">
+      <span class="icon">📊</span> نظرة عامة
+    </button>
+    <button class="nav-item" onclick="showPage('team')">
+      <span class="icon">👥</span> الفريق
+    </button>
+    <button class="nav-item" onclick="showPage('leads')">
+      <span class="icon">📩</span> الليدات
+    </button>
+    <button class="nav-item" onclick="showPage('settings')">
+      <span class="icon">⚙️</span> الإعدادات
+    </button>
+  </aside>
+
+  <main class="main">
+    <!-- Status Bar -->
+    <div class="status-bar" id="status-bar">
+      <div class="status-dot pending" id="status-dot"></div>
+      <span id="status-text">جاري الاتصال بواتساب...</span>
+    </div>
+
+    <!-- Page: Overview -->
+    <div class="page active" id="page-overview">
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">إجمالي الليدات</div>
+          <div class="stat-value" id="stat-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">ليدات جديدة</div>
+          <div class="stat-value" id="stat-new">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">تواصل مجدد</div>
+          <div class="stat-value" id="stat-return">—</div>
+        </div>
+      </div>
+
+      <div class="card" id="next-card">
+        <div class="card-title">اللي جاي عليه الدور</div>
+        <div id="next-info">جاري التحميل...</div>
+      </div>
+
+      <div style="height:16px;"></div>
+
+      <div class="card">
+        <div class="card-title">توزيع الفريق</div>
+        <div id="team-overview"></div>
+      </div>
+    </div>
+
+    <!-- Page: Team -->
+    <div class="page" id="page-team">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">إضافة عضو جديد</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">الاسم</label>
+            <input type="text" class="form-input" id="inp-name" placeholder="اسم السيلز">
+          </div>
+          <div class="form-group">
+            <label class="form-label">رقم واتساب السيلز</label>
+            <input type="text" class="form-input" id="inp-phone" placeholder="201012345678" dir="ltr" style="text-align:left">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="addMember()">إضافة للفريق</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">أعضاء الفريق</div>
+        <div id="team-list">جاري التحميل...</div>
+      </div>
+    </div>
+
+    <!-- Page: Leads -->
+    <div class="page" id="page-leads">
+      <div class="card">
+        <div class="filter-tabs">
+          <button class="filter-tab active" onclick="filterLeads('all', this)">الكل</button>
+          <button class="filter-tab" onclick="filterLeads('new', this)">جديد</button>
+          <button class="filter-tab" onclick="filterLeads('return', this)">رجع</button>
+        </div>
+        <div id="leads-list">جاري التحميل...</div>
+      </div>
+    </div>
+
+    <!-- Page: Settings -->
+    <div class="page" id="page-settings">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">اتصال واتساب</div>
+        <div id="qr-area">جاري التحميل...</div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">إعدادات التوزيع</div>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">مدة تذكر العميل (ساعات)</label>
+          <input type="number" class="form-input" id="inp-expiry" value="24" min="1" max="720" style="max-width:200px;">
+          <div style="font-size:12px;color:var(--text3);margin-top:4px;">لو العميل رجع قبل كده الساعات هيتوزع على نفس السيلز</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()">حفظ</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">إعادة ضبط</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-ghost" onclick="resetIndex()">إعادة ترتيب الدور</button>
+          <button class="btn btn-danger" onclick="confirmReset()">مسح كل الليدات والتوزيعات</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const COLORS = [
+  ['#22c55e','rgba(34,197,94,0.15)'],
+  ['#3b82f6','rgba(59,130,246,0.15)'],
+  ['#f59e0b','rgba(245,158,11,0.15)'],
+  ['#ec4899','rgba(236,72,153,0.15)'],
+  ['#8b5cf6','rgba(139,92,246,0.15)'],
+  ['#06b6d4','rgba(6,182,212,0.15)'],
+  ['#f97316','rgba(249,115,22,0.15)'],
+  ['#ef4444','rgba(239,68,68,0.15)'],
+];
+
+let appData = null;
+let leadsFilter = 'all';
+
+function getInitials(name) {
+  const parts = name.trim().split(' ');
+  return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+}
+
+function timeAgo(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+  if (m < 1) return 'الآن';
+  if (m < 60) return `منذ ${m} دقيقة`;
+  if (h < 24) return `منذ ${h} ساعة`;
+  return `منذ ${d} يوم`;
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'settings') renderQR();
+}
+
+// ======= Fetch & Render =======
+async function fetchData() {
+  try {
+    const res = await fetch('/api/data');
+    appData = await res.json();
+    renderAll();
+  } catch (e) {
+    console.error('خطأ:', e);
+  }
+}
+
+async function checkStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const { ready, qr } = await res.json();
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+
+    if (ready) {
+      dot.className = 'status-dot connected';
+      txt.textContent = 'واتساب متصل ✓';
+    } else if (qr) {
+      dot.className = 'status-dot pending';
+      txt.textContent = 'في انتظار مسح الـ QR Code';
+      // عرض QR في صفحة الإعدادات
+      const img = document.getElementById('qr-img');
+      if (img) img.src = qr;
+    } else {
+      dot.className = 'status-dot disconnected';
+      txt.textContent = 'جاري الاتصال...';
+    }
+  } catch (e) {}
+}
+
+function renderAll() {
+  if (!appData) return;
+  renderStats();
+  renderNextInfo();
+  renderTeamOverview();
+  renderTeamList();
+  renderLeads();
+}
+
+function renderStats() {
+  const total = appData.leads.length;
+  const newLeads = appData.leads.filter(l => l.type === 'new').length;
+  const returnLeads = appData.leads.filter(l => l.type === 'return').length;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-new').textContent = newLeads;
+  document.getElementById('stat-return').textContent = returnLeads;
+}
+
+function renderNextInfo() {
+  const el = document.getElementById('next-info');
+  if (!appData.team.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:14px;">أضف أعضاء الفريق أولاً</div>';
+    return;
+  }
+  const idx = appData.currentIndex % appData.team.length;
+  const m = appData.team[idx];
+  const [color, bg] = COLORS[idx % COLORS.length];
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="avatar" style="background:${bg};color:${color};">${getInitials(m.name)}</div>
+      <div>
+        <div style="font-size:16px;font-weight:600;color:var(--text);">${m.name}</div>
+        <div style="font-size:12px;color:var(--text3);">${m.count || 0} ليد حتى الآن</div>
+      </div>
+    </div>`;
+}
+
+function renderTeamOverview() {
+  const el = document.getElementById('team-overview');
+  if (!appData.team.length) {
+    el.innerHTML = '<div class="empty">لا يوجد أعضاء بعد</div>';
+    return;
+  }
+  const max = Math.max(...appData.team.map(m => m.count || 0)) || 1;
+  const nextIdx = appData.currentIndex % appData.team.length;
+  el.innerHTML = appData.team.map((m, i) => {
+    const [color, bg] = COLORS[i % COLORS.length];
+    const pct = Math.round(((m.count || 0) / max) * 100);
+    const isNext = i === nextIdx;
+    return `
+      <div class="team-item">
+        <div class="avatar" style="background:${bg};color:${color};">${getInitials(m.name)}</div>
+        <div class="team-info">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="team-name">${m.name}</span>
+            ${isNext ? '<span class="next-badge">التالي</span>' : ''}
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div>
+        </div>
+        <span class="team-count">${m.count || 0}</span>
+      </div>`;
+  }).join('');
+}
+
+function renderTeamList() {
+  const el = document.getElementById('team-list');
+  if (!appData.team.length) {
+    el.innerHTML = '<div class="empty">لا يوجد أعضاء بعد</div>';
+    return;
+  }
+  const nextIdx = appData.currentIndex % appData.team.length;
+  el.innerHTML = appData.team.map((m, i) => {
+    const [color, bg] = COLORS[i % COLORS.length];
+    const isNext = i === nextIdx;
+    return `
+      <div class="team-item">
+        <div class="avatar" style="background:${bg};color:${color};">${getInitials(m.name)}</div>
+        <div class="team-info">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="team-name">${m.name}</span>
+            ${isNext ? '<span class="next-badge">التالي</span>' : ''}
+          </div>
+          <div class="team-phone">${m.phone || 'لا يوجد رقم'}</div>
+        </div>
+        <button class="btn btn-danger" onclick="deleteMember(${m.id})" style="font-size:12px;padding:5px 12px;">حذف</button>
+      </div>`;
+  }).join('');
+}
+
+function renderLeads() {
+  const el = document.getElementById('leads-list');
+  if (!appData) return;
+  const filtered = leadsFilter === 'all'
+    ? [...appData.leads].reverse()
+    : [...appData.leads].filter(l => l.type === leadsFilter).reverse();
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="empty">لا يوجد ليدات بعد</div>';
+    return;
+  }
+
+  el.innerHTML = filtered.slice(0, 100).map(lead => {
+    const memberIdx = appData.team.findIndex(m => m.id === lead.assignedId);
+    const [color] = COLORS[memberIdx >= 0 ? memberIdx % COLORS.length : 0];
+    return `
+      <div class="lead-item">
+        <span class="lead-type-badge ${lead.type === 'new' ? 'badge-new' : 'badge-return'}">
+          ${lead.type === 'new' ? 'جديد' : 'رجع'}
+        </span>
+        <div style="flex:1;min-width:0;">
+          <div class="lead-phone">+${lead.phone}</div>
+          <div class="lead-meta">${timeAgo(lead.ts)}</div>
+          ${lead.message ? `<div class="lead-message">${escHtml(lead.message.substring(0, 100))}</div>` : ''}
+          <div class="lead-sales" style="color:${color};">${lead.assignedName}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function filterLeads(type, btn) {
+  leadsFilter = type;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderLeads();
+}
+
+function renderQR() {
+  const el = document.getElementById('qr-area');
+  fetch('/api/status').then(r => r.json()).then(({ ready, qr }) => {
+    if (ready) {
+      el.innerHTML = '<div style="color:var(--green);font-size:14px;padding:8px 0;">✓ واتساب متصل بنجاح</div>';
+    } else if (qr) {
+      el.innerHTML = `
+        <div class="qr-container">
+          <div style="font-size:13px;color:var(--text2);">افتح واتساب > الأجهزة المرتبطة > ربط جهاز</div>
+          <img id="qr-img" src="${qr}" width="220" height="220" alt="QR Code">
+          <div style="font-size:12px;color:var(--text3);">الـ QR بيتجدد كل دقيقة</div>
+        </div>`;
+    } else {
+      el.innerHTML = '<div style="color:var(--text3);font-size:14px;padding:8px 0;">⏳ جاري تحميل QR Code...</div>';
+    }
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ======= Actions =======
+async function addMember() {
+  const name = document.getElementById('inp-name').value.trim();
+  const phone = document.getElementById('inp-phone').value.trim();
+  if (!name) { alert('أدخل اسم العضو'); return; }
+  await fetch('/api/team', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, phone })
+  });
+  document.getElementById('inp-name').value = '';
+  document.getElementById('inp-phone').value = '';
+  await fetchData();
+}
+
+async function deleteMember(id) {
+  if (!confirm('تأكيد حذف هذا العضو؟')) return;
+  await fetch('/api/team/' + id, { method: 'DELETE' });
+  await fetchData();
+}
+
+async function resetIndex() {
+  if (!confirm('إعادة ترتيب الدور من البداية؟')) return;
+  await fetch('/api/reset-index', { method: 'POST' });
+  await fetchData();
+}
+
+async function confirmReset() {
+  if (!confirm('هتمسح كل الليدات والتوزيعات! متأكد؟')) return;
+  await fetch('/api/reset-assignments', { method: 'POST' });
+  await fetchData();
+}
+
+async function saveSettings() {
+  const expiry = document.getElementById('inp-expiry').value;
+  await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expiryHours: expiry })
+  });
+  alert('تم الحفظ ✓');
+}
+
+// ======= Polling =======
+fetchData();
+checkStatus();
+setInterval(fetchData, 5000);
+setInterval(checkStatus, 3000);
+</script>
+</body>
+</html>
